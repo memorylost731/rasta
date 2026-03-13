@@ -9,6 +9,7 @@ Open-source floor plan recognition and material identification engine. Drop-in r
 - **Floor plan detection** — walls, rooms, doors from images/PDFs (OpenCV + Hough lines + morphology)
 - **Material identification** — 23 building materials from photos via Ollama vision or OpenCV fallback
 - **PBR texture synthesis** — seamless diffuse, normal, and roughness maps from a single photo
+- **Building geometry pipeline** — city-scale OSM building footprints with 3D extrusion, Mapillary facade classification, and TSCM RF enrichment (Malta + Gozo, 19 cities)
 - **React-planner integration** — scene JSON compatible with react-planner
 - **Three.js materials** — PBR MeshStandardMaterial configs for 3D rendering
 - **OSM tagging** — maps materials to OpenStreetMap `building:material` / `surface` tags
@@ -84,9 +85,23 @@ app.include_router(rasta_router)
 | `POST` | `/api/texture-pipeline` | **Full pipeline**: photo → material + textures + scene |
 | `POST` | `/api/material-to-scene` | Material → react-planner + Three.js + OSM + TSCM |
 | `GET`  | `/api/materials` | List all 23 materials with properties |
+| `GET`  | `/api/buildings` | GeoJSON building footprints with 3D extrusion properties |
+| `GET`  | `/api/buildings/facades` | Buildings + Mapillary facade material classification |
+| `GET`  | `/api/buildings/{osm_id}` | Single building detail with facade classification |
+| `POST` | `/api/buildings/classify` | Classify facade materials from uploaded photos |
 | `GET`  | `/health` | Health check |
 
 Interactive docs at `/docs` (Swagger) and `/redoc`.
+
+### Building Geometry Endpoints
+
+The `/api/buildings` endpoints serve MapLibre-ready GeoJSON with fill-extrusion properties.
+
+- **`GET /api/buildings?bbox=south,west,north,east`** — Returns building footprints from OSM Overpass. Each feature includes `height`, `levels`, `material`, `color`, and centroid coordinates. Defaults to Valletta, Malta when no bbox is provided.
+
+- **`GET /api/buildings/facades?bbox=...&use_mapillary=true&mapillary_radius=30`** — Full pipeline: fetches OSM footprints, searches Mapillary for nearby street-view images, classifies facade materials using Rasta's texture_identify, and enriches each building with `facade_material`, `facade_confidence`, `tscm_rf` (RF attenuation at 3 bands), and `tscm_thermal_conductivity`. Set `use_mapillary=false` for faster OSM-only mode.
+
+- **`POST /api/buildings/classify`** — Upload up to 20 facade photographs for material classification. Returns per-image material, confidence, and RF properties.
 
 ## Materials Database
 
@@ -125,6 +140,45 @@ async with AsyncRastaClient("http://gpu:8020") as client:
 
 [Full SDK guide →](docs/sdk-guide.md)
 
+## Building Geometry Pipeline
+
+City-scale building footprint extraction with facade material classification, focused on **Malta and Gozo** (19 cities: 13 Malta + 6 Gozo).
+
+```
+OSM Overpass API ──→ Building Footprints (GeoJSON)
+                           │
+                           ├── height, levels, roof_shape, material (from OSM tags)
+                           ├── centroid coordinates (for Mapillary image search)
+                           │
+                     Mapillary v4 API ──→ Street-view images near each building
+                           │
+                           ├── Compass angle filtering (facade-facing shots)
+                           ├── Download + crop facade region
+                           │
+                     Rasta texture_identify ──→ Material classification
+                           │
+                           ▼
+                     Enriched GeoJSON Feature
+                           ├── facade_material, facade_confidence
+                           ├── tscm_rf (sub_1ghz, 2_4ghz, 5ghz attenuation dB)
+                           ├── tscm_thermal_conductivity, tscm_thickness_mm
+                           └── color (hex, MapLibre data-driven styling)
+```
+
+**Malta + Gozo cities (19):** Valletta, Sliema, St Julian's, Three Cities, Birkirkara, Mosta, Qormi, Naxxar, Rabat, Mdina, Marsaskala, Mellieha, Swieqi, Victoria (Gozo), Xlendi, Marsalforn, Nadur, Sannat, Gharb.
+
+**Pre-fetch city data:**
+```bash
+python3 scripts/prefetch-cities.py --all          # All 19 cities
+python3 scripts/prefetch-cities.py --city valletta # Single city
+python3 scripts/prefetch-cities.py --list          # Show available cities
+```
+
+Outputs GeoJSON files + statistics per city to `data/cities/`.
+
+**Environment variables:**
+- `MAPILLARY_CLIENT_TOKEN` — required for street-view facade classification. Without it, the pipeline falls back to OSM material tags and Valletta limestone defaults.
+
 ## Architecture
 
 ```
@@ -143,14 +197,28 @@ Floor Plan ──→ Wall Detection (Hough) ──→ Room Detection (Contours)
                  Door Detection              Scene Converter
                       │                          │
                       └────────→ react-planner JSON ←──────┘
+
+BBox ──→ OSM Overpass ──→ Building Footprints ──→ Mapillary Search
+              │                                        │
+              ▼                                        ▼
+         GeoJSON with                          Facade Crop + Classify
+         3D extrusion props                    (reuses Material ID)
+              │                                        │
+              └──→ Enriched GeoJSON ←──────────────────┘
+                      │
+                      ├── MapLibre fill-extrusion layer
+                      ├── TSCM RF attenuation per building
+                      └── Data-driven color styling
 ```
 
 ## Documentation
 
-- [API Reference](docs/api-reference.md) — full endpoint documentation
+- [API Reference](docs/api-reference.md) — full endpoint documentation (including `/api/buildings/*`)
 - [SDK Guide](docs/sdk-guide.md) — Python client usage
 - [Materials Database](docs/materials.md) — all 23 materials with properties
 - [Examples](examples/) — quickstart, async batch, floor plan processing
+- [Geometry Setup](scripts/install-geometry-deps.sh) — install geometry pipeline dependencies
+- [City Pre-fetcher](scripts/prefetch-cities.py) — download OSM data for Malta + Gozo cities
 
 ## Development
 

@@ -10,15 +10,44 @@ It replaces RasterScan as the backend for the PlanO floor plan planner.
 ```
 rasta/
 ├── api.py                    # FastAPI routes (texture pipeline)
-├── server.py                 # FastAPI app factory (floor plan + texture)
+├── server.py                 # FastAPI app factory (floor plan + texture + geometry)
 ├── sdk.py                    # Python SDK client for remote Rasta servers
 ├── texture_identify.py       # Material classification (Ollama vision + OpenCV)
 ├── texture_extract.py        # PBR texture synthesis (diffuse/normal/roughness)
 ├── texture_to_planner.py     # react-planner / Three.js / OSM / TSCM mapping
 ├── floorplan_detect.py       # Floor plan wall/room/door detection (OpenCV)
 ├── scene_converter_legacy.py # RasterScan JSON → react-planner scene converter
-└── __init__.py               # Package metadata
+├── __init__.py               # Package metadata
+└── geometry/                 # Building geometry + facade classification pipeline
+    ├── __init__.py            # Public API: fetch_buildings, classify_facade, run_pipeline, BBox
+    ├── api.py                 # FastAPI router (/api/buildings/*) — GeoJSON + facade endpoints
+    ├── osm_buildings.py       # Overpass API client, GeoJSON with 3D extrusion properties
+    ├── mapillary_client.py    # Mapillary v4 API — street-view image search + download
+    ├── facade_classifier.py   # Per-building facade material classification with aggregation
+    └── building_pipeline.py   # Full orchestrator (OSM + Mapillary + Rasta material ID)
 ```
+
+### Geometry Pipeline
+
+The `rasta.geometry` subpackage adds city-scale building analysis:
+
+1. **OSM Overpass** (`osm_buildings.py`) — Fetches building footprints with height, levels,
+   material, and roof tags. Outputs MapLibre fill-extrusion-ready GeoJSON. Default area: Valletta, Malta.
+2. **Mapillary** (`mapillary_client.py`) — Searches for street-view images near each building
+   centroid, filters by compass angle (facade-facing), downloads thumbnails. Requires
+   `MAPILLARY_CLIENT_TOKEN` env var; degrades gracefully when absent.
+3. **Facade classifier** (`facade_classifier.py`) — Crops facade region from street-view images,
+   runs Rasta's texture_identify pipeline (Ollama vision + OpenCV fallback), aggregates
+   per-building classifications with weighted confidence voting.
+4. **Pipeline** (`building_pipeline.py`) — Orchestrates all three steps with async batch
+   concurrency (semaphore). Enriches each GeoJSON feature with facade_material,
+   facade_confidence, TSCM RF attenuation, thermal conductivity, and MapLibre hex colors.
+5. **API** (`api.py`) — FastAPI router at `/api/buildings` with in-memory LRU cache.
+   Supports full pipeline, OSM-only mode, single-building lookup, and image upload classification.
+
+**Target geography:** Malta + Gozo (19 cities). Pre-fetch script at `scripts/prefetch-cities.py`.
+
+**Key data types:** `BBox`, `PipelineResult`, `BuildingClassification`, `MapillaryImage`, `FacadeCrop`.
 
 ## Key Patterns
 
@@ -41,9 +70,10 @@ rasta/
 
 - Python >= 3.10
 - fastapi, uvicorn, opencv-python-headless, numpy (core)
+- httpx (SDK client + geometry pipeline HTTP calls to Overpass/Mapillary)
 - torch, onnxruntime-gpu (optional GPU)
 - pdf2image, requests (optional full)
-- httpx (SDK client)
+- shapely, geopandas (optional geometry extras — see `scripts/install-geometry-deps.sh`)
 
 ## Testing
 
@@ -54,11 +84,13 @@ rasta/
 ## API Design
 
 - All texture endpoints under `/api/` prefix
+- Building geometry endpoints under `/api/buildings/` prefix
 - Floor plan endpoints at root (`/upload-plan`, `/analyze`)
 - Health check at `/health`
 - File uploads via multipart/form-data
-- JSON responses everywhere
+- JSON responses everywhere (GeoJSON for building endpoints)
 - CORS configured for PlanO frontend origins
+- Geometry router mounted on main server via `rasta.geometry.api`
 
 ## Material Database
 

@@ -34,6 +34,7 @@ __all__ = [
     "texture_extract",
     "texture_to_planner",
     "floorplan_detect",
+    "geometry",
     "api",
     "sdk",
 ]

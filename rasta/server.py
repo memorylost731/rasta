@@ -108,6 +108,13 @@ try:
 except ImportError:
     pass
 
+## Mount building geometry + facade classification routes
+try:
+    from rasta.geometry.api import router as geometry_router
+    app.include_router(geometry_router)
+except ImportError:
+    pass
+
 
 @app.get("/health")
 async def health():
