@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rasta"
+version = "2.0.0"
+description = "Open-source floor plan recognition & material identification engine"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Open Forged Solutions", email = "dev@openforged.com" },
+]
+keywords = [
+    "floor-plan",
+    "material-identification",
+    "pbr-textures",
+    "computer-vision",
+    "openstreetmap",
+    "tscm",
+    "react-planner",
+    "threejs",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "opencv-python-headless>=4.8",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+sdk = ["httpx>=0.24"]
+gpu = ["torch>=2.0", "onnxruntime-gpu>=1.16"]
+full = ["pdf2image>=1.16", "requests>=2.28", "httpx>=0.24"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.24",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+rasta = "rasta.server:main"
+
+[project.urls]
+Homepage = "https://github.com/memorylost731/rasta"
+Repository = "https://github.com/memorylost731/rasta"
+Documentation = "https://github.com/memorylost731/rasta/tree/main/docs"
+Issues = "https://github.com/memorylost731/rasta/issues"
+
+[tool.setuptools.packages.find]
+include = ["rasta*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

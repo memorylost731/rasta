@@ -1,4 +1,36 @@
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Output
+out/
+*.log
+
+# Temp
+*.tmp
+.ruff_cache/
